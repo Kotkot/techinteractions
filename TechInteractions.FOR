@@ -1,4 +1,14 @@
-
+C========================================================================
+C This is the multispecies technical interaction MSE model adapted from Carey McGilliard's code
+C 
+C General model description:
+C This model sets the OM, EM, CR for the multispecies tech int model and uses Jim Ianelli's (modified) tech int admb code to implement the multispecies catch tradeoffs
+C The estimation model is based on CAB (very simple age structured assessment model)     
+C
+C Authors:
+C Kotaro Ono
+C Carey McGilliard      
+      
 C========================================================================
 
 	MODULE ShareDataRatioSubs
@@ -9,7 +19,7 @@ C========================================================================
       INTEGER MaxSpec,MinPYr,MaxPYr,MaxAge,Nsex,MaxTime
       INTEGER MaxNSBlk,MaxEWBlk,MaxSim,MaxLengthBins
       INTEGER MaxAssArea,MaxOpenArea,Max3StrataArea,MaxConfigs,MaxMVN
-      PARAMETER (MaxSpec=2,MinPYr=1,MaxPYr=200,MaxTime=1)
+      PARAMETER (MaxSpec=3,MinPYr=1,MaxPYr=200,MaxTime=1)
       PARAMETER (MaxAge=40,Nsex=2,MaxNSBlk=30,MaxEWBlk=5)
       PARAMETER (MaxAssArea=10,MaxOpenArea = 12, Max3StrataArea = 20)
 	PARAMETER (MaxSim = 102)
@@ -188,8 +198,8 @@ C     Data for assessment purposes
       INTEGER SuvSS(MaxSpec,0:MaxAssArea,MinPYr:MaxPyr)
       INTEGER EffectSampCatch1,EffectSampSurvey1
       INTEGER EffectSampCatch2,EffectSampSurvey2
-      REAL*8 CNObs(MaxSpec,0:MaxAssArea,MinPyr:MaxPyr,Nsex,0:MaxAge)
-      REAL*8 SNObs(MaxSpec,0:MaxAssArea,MinPyr:MaxPyr,Nsex,0:MaxAge)
+      REAL*8 CNObs(MaxSpec,0:MaxAssArea,MinPyr:MaxPyr,MaxSpec,0:MaxAge)
+      REAL*8 SNObs(MaxSpec,0:MaxAssArea,MinPyr:MaxPyr,MaxSpec,0:MaxAge)
       REAL*8 Ssel(MaxSpec,0:MaxAge)
       REAL*8 CpueCV,SurvCV
       INTEGER IsDeterm,FirstSurvYr,FreqSurv
@@ -532,6 +542,7 @@ C     Debugging variables:
 !      REAL(8),DIMENSION(1:MaxSpec) :: SeedQuota
       REAL(8) :: SeedQuota
       REAL(8) :: Pstar
+      REAL(8) :: EstimatedP
       INTEGER :: Nconfigs
       REAL(8),DIMENSION(1:MaxSpec,1:MaxConfigs) :: ConfigWts !,hConfigs, MConfigs
       REAL(8) :: TheM,TheX
@@ -647,7 +658,7 @@ C	Time counter variables
 
 C	INTEGER Isim
       CHARACTER*1 MYINDC
-!      CHARACTER*2 HistChar1,HistChar2,HistChar3
+!     CHARACTER*2 HistChar1,HistChar2,HistChar3
       INTEGER Iass,U,VV,i,iu,TheSim
       REAL*8 X(100),SS
       REAL*8 FUNK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -661,7 +672,7 @@ C     !---------------------------------------------------------------------
       
 
 ! What time did we start?
-      OPEN(UNIT=2001,FILE='TimeDateStamp.OUT')
+      OPEN(UNIT=2001,FILE='results/TimeDateStamp.OUT')
       CALL mydate('Start time and date      ')
 
 C     Clear some files
@@ -683,56 +694,58 @@ C     Read in the specifications for the run
 
 
 C     Set up specifications that are independent of recruitment residuals
-      CALL Equn()
-      CALL InitProj()
+      CALL Equn()             ! this is unfished equilibrium number at age per recruit
+      CALL InitProj()         ! this is the unfished spawning stock number and the number at age per recruit
 C
 
 C	Input Files
 
-!      OPEN(UNIT=2,FILE="RANDOM6.NUM")
+!     OPEN(UNIT=2,FILE="RANDOM6.NUM")
       OPEN(UNIT=2,FILE="RANDOMTRY.NUM") !This is used - seeds for each sim come from this file
 	OPEN(UNIT=3,FILE="RANDOM4.NUM")
 
-
 C	Output Files
-	OPEN(UNIT=39,FILE="SUMM18.OUT")
+	OPEN(UNIT=39,FILE="results/SUMM18.OUT")
 
-
- 
-!      LastSuperSim = 1
+!     LastSuperSim = 1
 !	DO 10001 SuperSim = 1,LastSuperSim
 
 C     Open output files 
-      OPEN(UNIT=14,FILE="SUMM2.OUT")
-      OPEN(UNIT=15,FILE="SUMM3.OUT")
-      OPEN(UNIT=16,FILE="SUMM4.OUT")
-      OPEN(UNIT=17,FILE="SUMM5.OUT")
-      OPEN(UNIT=18,FILE="SUMM6.OUT")
+      OPEN(UNIT=14,FILE="results/SUMM2.OUT")
+      OPEN(UNIT=15,FILE="results/SUMM3.OUT")
+      OPEN(UNIT=16,FILE="results/SUMM4.OUT")
+      OPEN(UNIT=17,FILE="results/SUMM5.OUT")
+      OPEN(UNIT=18,FILE="results/SUMM6.OUT")
 C     Carey: Add a file for analyzing movement characteristics
-      OPEN(UNIT=19,FILE="SUMM7.OUT")
-      OPEN(UNIT=26,FILE="SUMM8.OUT")
-      OPEN(UNIT=27,FILE="SUMM9.OUT")
-      OPEN(UNIT=28,FILE="SelAfor.OUT")
-      OPEN(UNIT=29,FILE="SUMM10.OUT")
-      OPEN(UNIT=32,FILE="SUMM11.OUT")
-      OPEN(UNIT=33,FILE="SUMM12.OUT")
-      OPEN(UNIT=34,FILE="SUMM13.OUT")
-      OPEN(UNIT=35,FILE="SUMM14.OUT")
-	OPEN(UNIT=38,FILE="SUMM17.OUT")
-      OPEN(UNIT=22,FILE="SAVE.ALL")
-	OPEN(UNIT=40,FILE="SUMM19.OUT")
-	OPEN(UNIT=41,FILE="SUMM20.OUT")
-	OPEN(UNIT=49,FILE="SUMM27.OUT")
-      OPEN(UNIT = 1500,FILE = "CatchCPUE.OUT")
-      OPEN(UNIT = 1600,FILE = "SurveyCPUE.OUT")
-      OPEN(UNIT = 78,FILE = 'SaveConstantEff.All')
-      OPEN(UNIT = 79,FILE = 'Move4SS.OUT')
-      OPEN(UNIT = 260,FILE="RECRUITS.OUT")
+      OPEN(UNIT=19,FILE="results/SUMM7.OUT")
+      OPEN(UNIT=26,FILE="results/SUMM8.OUT")
+      OPEN(UNIT=27,FILE="results/SUMM9.OUT")
+      OPEN(UNIT=28,FILE="results/SelAfor.OUT")
+      OPEN(UNIT=29,FILE="results/SUMM10.OUT")
+      OPEN(UNIT=32,FILE="results/SUMM11.OUT")
+      OPEN(UNIT=33,FILE="results/SUMM12.OUT")
+      OPEN(UNIT=34,FILE="results/SUMM13.OUT")
+      OPEN(UNIT=35,FILE="results/SUMM14.OUT")
+	OPEN(UNIT=38,FILE="results/SUMM17.OUT")
+      OPEN(UNIT=22,FILE="results/SAVE.ALL")
+	OPEN(UNIT=40,FILE="results/SUMM19.OUT")
+	OPEN(UNIT=41,FILE="results/SUMM20.OUT")
+	OPEN(UNIT=49,FILE="results/SUMM27.OUT")
+      OPEN(UNIT = 1500,FILE = "results/CatchCPUE.OUT")
+      OPEN(UNIT = 1600,FILE = "results/SurveyCPUE.OUT")
+      OPEN(UNIT = 78,FILE = 'results/SaveConstantEff.All')
+      OPEN(UNIT = 79,FILE = 'results/Move4SS.OUT')
+      OPEN(UNIT = 260,FILE="results/RECRUITS.OUT")
     
       !Pstar-related files
-      OPEN(UNIT = 400,FILE = "Pstar1.OUT") !FDistn,FOFL information by vector, configuration, year,simulation
-      OPEN(UNIT = 401,FILE = "Pstar2.OUT") !EstF35,EstF40 and associated optimization info to check if FOFL-related optimizations worked. QAQC, mostly.
-      OPEN(UNIT = 402,FILE = "Pstar3.OUT") !Flags simulation, year, and configuration that didn't converge (defined as no .cor file)
+      OPEN(UNIT = 400,FILE = "results/Pstar1.OUT") !FDistn,FOFL information by vector, configuration, year,simulation
+      OPEN(UNIT = 401,FILE = "results/Pstar2.OUT") !EstF35,EstF40 and associated optimization info to check if FOFL-related optimizations worked. QAQC, mostly.
+      OPEN(UNIT = 402,FILE = "results/Pstar3.OUT") !Flags simulation, year, and configuration that didn't converge (defined as no .cor file)
+      OPEN(UNIT = 4000,FILE = "results/Pstar1_Old.OUT")
+      OPEN(UNIT = 4001,FILE = "results/Pstar2_Old.OUT")
+      OPEN(UNIT = 4002,FILE = "results/Pstar3_Old.OUT")
+
+      
       WRITE(402,*) "The_following_assessments_didnt_produce_cor_or_MVNn"
       WRITE(402,*) "Isim, GlobalProjYr, Ispec, Iconfig, TestMVN"
       !Make character variables of historical assessment years to then string together file names containing info on assessment year
@@ -764,8 +777,8 @@ C     Carey: Add a file for analyzing movement characteristics
 !      OPEN(UNIT = 7000,File = 'SpatialResults.Yr'//HistChar3//'Method2')
 
 
-	  OPEN(UNIT=51,FILE = "SUMM29.OUT")
-	  OPEN(UNIT=52,FILE = "SUMM30.OUT")
+	  OPEN(UNIT=51,FILE = "results/SUMM29.OUT")
+	  OPEN(UNIT=52,FILE = "results/SUMM30.OUT")
 
 
 C	Call a function here that within FUNK does the simulation NSim times, adds up the results from (1) a wide ranging profile and (2) the profile dialed in and then calls the FIT function to obtain the exact average best constant effort rate
@@ -974,6 +987,7 @@ C       Conduct stock assessments
         CALL GenData(TheProjYear) !TheProjYear is now the current year
         CALL Summary2(TheProjYear)
         CALL SummaryPstar(TheProjYear)
+        CALL SummaryPstar_Old(TheProjYear)
 
 12000  CONTINUE 
    
@@ -1021,6 +1035,9 @@ C This CONTINUE refers to SuperSim = 1,2, which does not optimize, but performs 
       CLOSE(400) !Pstar1.out
       CLOSE(401) !Pstar2.out
       CLOSE(402) !Pstar3.out
+      CLOSE(4000)
+      CLOSE(4001)
+      CLOSE(4002)
 
       total = etime(elapsed)
 	WRITE(*,*)
@@ -1061,7 +1078,6 @@ C
 C     Clear summary array
       PassEstVar = 0
 
-
 C
 C     Conduct stock assessments
        DO 10000 Ispec = 1,Nspec
@@ -1069,7 +1085,6 @@ C     Conduct stock assessments
 
 !Run assessments (either in cab or in ss3)
 !---------------------------------------------------------------------------
-
 
           CALL DOCAB2(Ispec,0,0,MinPYr,TheYr-1,0,"A")
 
@@ -1083,6 +1098,7 @@ C     Conduct stock assessments
      +      2(F7.4,1x))
       RETURN
       END SUBROUTINE DoEstAll
+
 C
 C ===========================================================================
 C    
@@ -1169,10 +1185,10 @@ C     Fecundity
       READ(13,*)
       READ(13,'(40X,5(F7.3,1x))') (MixN(Ispec),Ispec=1,Nspec)
       READ(13,'(40X,5(F7.3,1x))') (MixE(Ispec),Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (X1N(Ispec),V1N(Ispec),Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (X2N(Ispec),V2N(Ispec),Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (X1E(Ispec),V1E(Ispec),Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (X2E(Ispec),V2E(Ispec),Ispec=1,Nspec)
+      READ(13,'(40X,15(F7.3,1x))') (X1N(Ispec),V1N(Ispec),Ispec=1,Nspec)
+      READ(13,'(40X,15(F7.3,1x))') (X2N(Ispec),V2N(Ispec),Ispec=1,Nspec)
+      READ(13,'(40X,15(F7.3,1x))') (X1E(Ispec),V1E(Ispec),Ispec=1,Nspec)
+      READ(13,'(40X,15(F7.3,1x))') (X2E(Ispec),V2E(Ispec),Ispec=1,Nspec)
       READ(13,*)
 C     Selectivity for the fishery 
       READ(13,'(40X,5(F7.3,1x))') (SCL50(ISpec),Ispec=1,Nspec)
@@ -1251,15 +1267,15 @@ C     Data-related inputs
       READ(13,'(40X,I5)') ImplOpt
 	READ(13,*)
       READ(13,*)
-      READ(13,'(40X,5(F7.3,1x))') (MixNLarval(Ispec),Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (MixELarval(Ispec),Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (X1NLarval(Ispec),V1NLarval(Ispec),
+      READ(13,'(40X,15(F7.3,1x))') (MixNLarval(Ispec),Ispec=1,Nspec)
+      READ(13,'(40X,15(F7.3,1x))') (MixELarval(Ispec),Ispec=1,Nspec)
+      READ(13,'(40X,15(F7.3,1x))') (X1NLarval(Ispec),V1NLarval(Ispec),
      +	Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (X2NLarval(Ispec),V2NLarval(Ispec),
+      READ(13,'(40X,15(F7.3,1x))') (X2NLarval(Ispec),V2NLarval(Ispec),
      +	Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (X1ELarval(Ispec),V1ELarval(Ispec),
+      READ(13,'(40X,15(F7.3,1x))') (X1ELarval(Ispec),V1ELarval(Ispec),
      +	Ispec=1,Nspec)
-      READ(13,'(40X,5(F7.3,1x))') (X2ELarval(Ispec),V2ELarval(Ispec),
+      READ(13,'(40X,15(F7.3,1x))') (X2ELarval(Ispec),V2ELarval(Ispec),
      +	Ispec=1,Nspec)
       READ(13,*)
       READ(13,'(40X,I5)') NTargetDepl
@@ -1479,10 +1495,11 @@ C     Set up selectivity (survey)
 
       RETURN
       END SUBROUTINE ReadSpec
+
 C
 C ===========================================================================
-C
-	
+C    
+	  
       SUBROUTINE ReadCntl()
 C
 C This subroutine reads in the specifications of the estimator
@@ -1569,14 +1586,24 @@ C------------------------------------------------------------
 C
       RETURN
       END SUBROUTINE ReadCntl
+
 C
 C ===========================================================================
-C     
-	 
+C    
+	  
       SUBROUTINE Equn()
 C
 C This subroutine calculates the equiliibrium numbers-at-age spatially -
 C essentially a spatial yield-per-recruit analysis.
+C	This calculates the unfished equilibrium number at age per recruit (spatially if the spatial model is activated)
+C	Steps:
+C		1. the first step is to calculate the number at age per recruit
+C		2. then to convert it to spawning number per recruit (multiply number per recruit with fecundity)
+C			 The notation SPBR is used here but it is number per recruit
+C		3. Determine the proportion of recruitment into areas. If =0, then it is a unique value. 
+C			 If >0, then the recruitment is distributed to different area based on the specification in 
+C			 OM.dat (which specifies the center of distribution AND the variance around it (Gaussian distribution)
+     
 C      
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -1639,13 +1666,21 @@ C**************END Carey's modification**************************
 C
       RETURN
       END SUBROUTINE Equn
+
 C
 C ===========================================================================
 C    
 	  
       SUBROUTINE InitProj()
 C
-C This subroutine projects the population ahead deterministically
+C	This subroutine calculates the spawning stock number and the number at age per recruit
+C	Steps:
+C		1. calculates the number at age for 1 recruit because RecVirg = 1
+C		2. using this, calculate the survival rate per animal at age
+C		3. if the species is moving, calculate this survival rate with the movement matrix
+C		4. there is a weird thing for dealing with the plus group but basically the code copies the plus group 
+C		   value to both the plus group and the Amax age. Aplus = Amax-1
+C		5. then calculate the Spawning stock number per 1 unit recruit (the above survival rate per animal at age multiplied by fecundity)
 C      
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -1685,14 +1720,14 @@ C         Project forwards in time period within one year (if Ntime = 1, dynamic
           DO 12100 IBlkNS = 1,NNSBlock
            DO 12100 IBlkEW = 1,NEWBlock
             DO 12100 Iage = 0,AmaxM
-             Surv = Temp1(IBlkNS,IBlkEW,Iage)*EXP(-M(Ispec)*Rtime)
+             Surv = Temp1(IBlkNS,IBlkEW,Iage)*EXP(-M(Ispec)*Rtime)     ! survival per animal at age
              DO 12110 JBlkNS = 1,NNSBlock
               DO 12110 JBlkEW = 1,NEWBlock
                Temp2(JBlkNS,JBlkEW,IAge) = Temp2(JBlkNs,JBlkEW,IAge) +  
      +           Surv*MixMat(Ispec,IBlkNS,IBlkEW,JBlkNS,JBlkEW)
 12110        CONTINUE              
 12100     CONTINUE           
-          Temp1 = Temp2 
+          Temp1 = Temp2                                                ! it is simply to save the temporary object
 C
 C         Update age-structure
           IF (Itime.EQ.NTime) THEN
@@ -1707,14 +1742,14 @@ C commenting out the next two lines should remove the existence of the plus grou
                 Aplus = AmaxM
                ENDIF
 C             DO 12210 Iage = AmaxM-1,1,-1
-			DO 12210 Iage = Aplus,1,-1
+			DO 12210 Iage = Aplus,1,-1                               !Equals AmaxM if no plus group and AmaxM-1 otherwise (because plus group is updated before this line)
               Temp1(IBlkNS,IBlkEW,Iage) = Temp1(IBlkNS,IBlkEW,Iage-1) 
 12210        CONTINUE  !Small loop over ages          
              Temp1(IBlkNS,IBlkEW,0) = RecVirg(Ispec,IBlkNS,IBlkEW)
 12200      CONTINUE !Small loop over NS and EW space
 C
 
-C          Calculate SSB
+C          Calculate SSB (Note: Fec(ISpec,Iage) = Maturity(Ispec,Iage)*BegWtAtAge(Ispec,Iage)
            IF (ISex.EQ.1) THEN
             SSBT = 0
             DO 12220 IBlkNS = 1,NNSBlock
@@ -1750,13 +1785,19 @@ C
       RETURN
 600   FORMAT(1x,I2,1x,I2,1x,I2,1x,I2,1x,I2,1x,F9.2)
       END SUBROUTINE InitProj
+
 C
 C ===========================================================================
-C  
-	    
+C    
+	  
       SUBROUTINE ProjForward(Kvals)
 C
-C This subroutine sets up the 
+C	This subroutine basically uses the results from InitProj and calculates the spawning stock number at age based on the number at age per recruit 
+C	Steps:
+C		1. first time it calculates the recruitment value			 
+C		2. multiplies the above with the spawning stock number at age (calculated in InitPorj)
+C		3. the stock recruit relationship
+C		4. then project forward the SSN and recruitment using the ProjYr subroutine
 C      
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -1772,7 +1813,7 @@ C     Local variables
 C
 C	Reset larval abundance
 C	Larvae = 0
-      Nsums = 0
+      Nsums = 0           ! sum of N over all ages
       NatAgeCompact(:,:,MinPYr,:,:)=0
       R0forSS3 = 0
 C     Set up initial conditions given the KVals
@@ -1910,13 +1951,25 @@ C
 
       RETURN
       END SUBROUTINE ProjForward
+
 C
 C ===========================================================================
-C
-	
+C    
+	  
       SUBROUTINE ProjYr(Year,TheEffort)
 C
-C This subroutine projects the population forward
+C	This subroutine projects the population forward (the SSN, recruits and also adds on the SSB, total biomass
+C	Steps
+C		1. for each year, it calculates the total biomass at age
+C		2. it calculates the exploitable biomass ExpBio based on biomass*catchability and the biomass = Temp1 is based on mid year = 1/2M removed
+C		3. Then effort (input) is distributed based on gravity rule (or uniformly depending on the option) if spatial model
+C		4. F is then determined as F = Qval*Effort
+C		5. catch is then N*exp(-M/2)*Sel*q*E (where N is the mid-year N)
+C		6. survey catch at age is then based on after the catch
+C		7. After removing catch and all M, then movement (if present)
+C		8. calculate the biomass and the spawning biomass
+C		9. then determine the Recruit for next year (including or not the process error)
+C
 C      
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -1987,7 +2040,7 @@ C     Move ahead by months
   
 C      Remove first-half of the natural mortality
        DO 21000 Ispec = 1,Nspec
-        Surv = EXP(-M(Ispec)*Rtime/2.0) !Survival halfway through the year if Rtime = 1
+        Surv = EXP(-M(Ispec)*Rtime/2.0) !Survival halfway through the year if Rtime = 1 (because we assume that fishing happened at the middle of the year)
         DO 21100 ISex = 1,Nsex
          DO 21100 IBlkNS = 1,NNSBlock
           DO 21100 IBlkEW = 1,NEWBlock
@@ -2014,12 +2067,12 @@ C      Find the effort by spatial cell
 C           WRITE(*,*) Isex,Iage,Temp1(Ispec,Isex,IBlkNs,IblkEW,Iage)
           ENDIF
 22111     CONTINUE       
-!          IF (DoProcessError.EQ.1) THEN   !Dealing with this in the specification of RecQ                       
+!          IF (DoProcessError.EQ.1) THEN   ! Qval is the globla catchability and theQ is the catchability by space (defined by RecQ)
             TheQ = Qval(Ispec)*RecQ(Isim,ISpec,IBlkNS,IblkEW)
 !          ELSE
 !            TheQ = Qval(Ispec)
 !          ENDIF
-          ExpBio(Ispec,IBlkNS,IBlkEW,Year,Itime) = Tmp*TheQ
+          ExpBio(Ispec,IBlkNS,IBlkEW,Year,Itime) = Tmp*TheQ       
           ExpBioT(IBlkNS,IBlkEW) = ExpBioT(IBlkNS,IBlkEW) + Tmp*TheQ
 22110    CONTINUE
          TotalExpBio = TotalExpBio + ExpBioT(IBlkNS,IBlkEW)
@@ -2436,13 +2489,13 @@ C      Add noise
         DO 33500 IBlkEW = 1,NEWBlock
 !-------------------------------------------------------------------------------
 !     Adding a switch to do or exclude process error for the purpose of debugging. 7/19/11
-!         IF (DoProcessError.EQ.1) THEN
+         IF (DoProcessError.EQ.1) THEN
            DO 33510 Isex = 1,Nsex
           N(Ispec,Isex,IBlkNs,IBlkEW,Year+1,0) = 
      +      N(Ispec,Isex,IBlkNs,IBlkEW,Year+1,0) *
      +       RecRes(Isim,Ispec,Year,IBlkNS,IBlkEW)
 33510      CONTINUE     
-!         ENDIF
+         ENDIF
 !-------------------------------------------------------------------------------
          RecSum(Ispec,Year+1,IblkNS,IblkEW) = 
      +      N(ISpec,1,IBlkNS,IBlkEW,Year+1,0)
@@ -2453,13 +2506,15 @@ C
 
       RETURN
       END SUBROUTINE ProjYr
+
 C
 C ===========================================================================
-C
-	
+C    
+	  
       SUBROUTINE FindQvals()
 C
-C This subroutine finds the q-values
+C	This subroutine finds the value of Q that produces the specified value for depletion
+C	this calls a function called "FIT" which uses as input (X=Qval,SS=output,Nspec,CareyGRD)
 C
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -2483,13 +2538,16 @@ C     correct depletion.
 
       RETURN
       END SUBROUTINE FindQvals
+
 C
 C ===========================================================================
-
-	
+C    
+	  
       SUBROUTINE AnnualProj
 C
-C This subroutine projects the population forward one year
+C	This is an important subroutine because it projects the population forward one year. 
+C	This function is used within FUNK and it is the main function that advances the pop by one
+C	year in the MSE
 C      
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -2518,14 +2576,30 @@ C      WRITE(*,*) 'Minimum',SS,EXP(X(1))*qval(1)
 C
       RETURN
       END SUBROUTINE AnnualProj
+
 C
-C===============================================================================
-C
-	
+C ===========================================================================
+C    
+	  
       REAL*8 FUNCTION FUNK(X)
 C
-C This function is the objective function that projects forward to see how close depletion is
-C to what is specified as initial depletion or final depletion
+C 	This function is the objective function that projects forward to see how close depletion is
+C 	to what is specified as initial depletion or final depletion
+C 	This subroutine has different behavior depending on the value of MinOpt
+C	MinOpt=1 --> find q for matching depletion value OUTPUTS depletion, FUNK
+C	MinOpt=2 --> minimize catch to quota by changing effort value OUTPUTS FUNK
+C	MinOpt=3 --> calculate the depletion value for a specific effort OUTPUTS FinDepRecord, FUNK
+C	MinOpt=6 --> calls findMSY and calculate the corresponding OUTPUTS TotSpatialSuvNum, FUNK
+C	MinOpt=8 --> weird. again find effort value that minimizes difference in initial or final depletion value compared to the input OUTPUTS depletion, FUNK
+C     MinOpt=9 --> finds the equilibrium condition for each Isim and OUTPUTS AvgDepletion, AvgSSB, AvgCatch accross Nsim, FUNK
+C     MinOpt=10 --> to calculate an estimated F(t) for the P* control rule from a given Nvector,estimated Selex, and specified M to yield a particular Catch biomass (a trial ABC or the OFL for instance) (I think deprecated as FUNK2 is used)
+C     MinOpt=12 --> finds the F required for estimated SPR = 0.35     	   !!!!!!!!!!!!!!!! That is the one I need to use for my work
+C     MinOpt=13 --> finds the F required for estimated SPR = 0.40 	       !!!!!!!!!!!!!!!! That is the one I need to use for my work
+C     MinOpt=14 --> exactly the same as option 12					           !!!!!!!!!!!!!!!! That is the one I need to use for my work
+C     MinOpt=15 --> exactly the same as option 13					           !!!!!!!!!!!!!!!! That is the one I need to use for my work
+ 
+
+
 	USE ShareDataRatioSubs
       IMPLICIT NONE
       
@@ -2551,6 +2625,9 @@ C     Reset FUNK
       FUNK = 1.0E20 
 C
 C     How to proceed depends on MinOpt
+
+C=======================================================================
+C     MinOpt=1 means to find q value that leads to specific depletion level
       IF (MinOpt.EQ.1) THEN 
 C
 C      Copy values across
@@ -2577,6 +2654,9 @@ C        WRITE(*,*) Depl,InitDep(Ispec)
 C       WRITE(*,*) FUNK,Qval
 C
       ENDIF
+
+C=======================================================================
+C     MinOpt=2 means to find E value that minimizes catch to quota
       IF (MinOpt.EQ.2) THEN 
       
        DO 22000 II = 1,NeffortAreas
@@ -2612,6 +2692,8 @@ C      Calculate the predicted catch - for MinOpt = 2, FUNK minimizes diffs betw
 C
       ENDIF
 
+C=======================================================================   
+C    MinOpt=3 is just to calculate the depletion value for a specific effort level (TheEffort(1) = EXP(X(1) before now, TheEffort(1) = X(1))
       IF (MinOpt.EQ.3) THEN 
 C      
        DO 31000 Yr = StartYr,EndYr
@@ -2647,7 +2729,9 @@ C Carey removed MinOpt.EQ.4 as it was related to the density ratio project
 C Carey removed MinOpt.EQ.5 as it was to find optimal effort for DR project
 
 
-C for funk assuming optimum already achieved:
+C=======================================================================
+C     MinOpt=6 is to call FindMSY
+C     for funk assuming optimum already achieved:
 	IF (MinOpt.EQ.6) THEN
 
 	Steep(1) = X(1)
@@ -2668,7 +2752,8 @@ C	FUNK = (TotSpatialSuvNum(MinPYr+199)-(TotSpatialSuvNum(-50))/2)**2
 C have to add up the exploitable numbers in the regular program (Prior to fishing and in most current years).
 C	FUNK = (exploitable numbers - K(exploitable numbers)/2)*(exploitable numbers - K(exploitable numbers)/2)
 
-!---------------------------------------------------------------------------------------------
+C=======================================================================
+C     MinOpt=8 finds effort value that minimizes difference in initial or final depletion value compared to the input
       IF (MinOpt.EQ.8) THEN 
 C
 C      Copy values across
@@ -2698,6 +2783,7 @@ C
       ENDIF
 
 C=======================================================================
+C     MinOpt=9 finds the equilibrium condition for each Isim and calculates AvgDepletion, AvgSSB, AvgCatch accross Nsim
 
 	IF (MinOpt.EQ.9) THEN
 	
@@ -2750,7 +2836,8 @@ C	Some extras:
 	ENDIF !MinOpt.EQ.9
 
 
-!--------------------------------------------------------------
+C=======================================================
+C     MinOpt=10 is to calculate an estimated F(t) for the P* control rule (I think deprecated as FUNK2 is used)
       IF (MinOpt.EQ.10) THEN
           !This MinOpt is to calculate an estimated F(t) for the P* control rule from
           !a given Nvector,estimated Selex, and specified M
@@ -2808,6 +2895,7 @@ C	Some extras:
               ENDIF
 
 C==========================================================
+C     MinOpt=12 finds the F required for estimated SPR = 0.35
        IF (MinOpt.EQ.12) THEN
          !Find the estimated F required for estimated SPR = 0.35
          !MinOpt = 12 and MinOpt = 13 are sisters; 13 the same, but for SPR = 0.40.
@@ -2828,8 +2916,10 @@ C==========================================================
            
          FUNK = FUNK + ((EstSPR- 0.35)**2)*10000  !Check into what the dimensions of EstSPR are (??)  Maybe need to get rid of the dimensions.
        
-       ENDIF
-C------------------------------------------------------------
+         ENDIF
+
+C==========================================================
+C     MinOpt=13 finds the F required for estimated SPR = 0.40
       IF (MinOpt.EQ.13) THEN
         !Find the estimated F required for estimated SPR = 0.40
         FUNK = 0.0
@@ -2839,7 +2929,9 @@ C------------------------------------------------------------
         
         FUNK = FUNK + ((EstSPR- 0.40)**2)*10000       
       ENDIF
-C-----------------------------------------------------------
+
+C==========================================================
+C     MinOpt=14 is the same as 12
       IF (MinOpt.EQ.14) THEN
         FUNK = 0.0
  
@@ -2848,7 +2940,9 @@ C-----------------------------------------------------------
         
         FUNK = FUNK + ((EstSPR- 0.35)**2)*10000       
       ENDIF            
-C-----------------------------------------------------------
+
+C==========================================================
+C     MinOpt=15 is the same as 13 
       IF (MinOpt.EQ.15) THEN
         FUNK = 0.0
 
@@ -2857,13 +2951,14 @@ C-----------------------------------------------------------
         
         FUNK = FUNK + ((EstSPR- 0.40)**2)*10000       
       ENDIF              
-C=============================================================
        
       RETURN
       END FUNCTION FUNK
+
 C
 C ===========================================================================
-C
+C    
+	  
       SUBROUTINE GenProcErr()
 C
 C This subroutine generates the process errors that will be needed for the
@@ -2917,22 +3012,24 @@ C     Generate the catchability error terms
       ENDIF
       RETURN
       END SUBROUTINE GenProcErr
+
 C
 C ===========================================================================
-C   
-	   
+C    
+	  
       SUBROUTINE Summary()
 C
 C This subroutine dumps various outputs
-C      
-	USE ShareDataRatioSubs
+C	1. Age, Fecundity, and weight_mid_year
+C
+      USE ShareDataRatioSubs
       IMPLICIT NONE
 C
 C     Local variables
       INTEGER Ispec,Isex,Itime,Iage,IBlkNS,IBlkEW
 C
 C     Open file
-      OPEN(UNIT=14,FILE="SUMM.OUT")
+      OPEN(UNIT=14,FILE="results/SUMM.OUT")
       DO 10000 Ispec = 1,Nspec
        DO 10000 Isex = 1,Nsex
         WRITE(14,601) Ispec,Isex
@@ -2949,15 +3046,38 @@ C     Open file
 603   FORMAT(1x,I3,1x,F9.4,1x,100(F8.3,1x))
 
       END SUBROUTINE Summary
+
 C
 C ===========================================================================
-C
-	
+C    
+	  
       SUBROUTINE Summary2(Year)
 C
 C This subroutine dumps results to a file
+C	1. Year, Effort
+C 	2. Species, Year, Relative Spbio (to the first year)
+C 	3. Species, Year, Relative SpBio (to the max value)
+C 	4. Species, Year, SpBio
+C 	5. Species, Year, Catch
+C 	6. Species, Year, Recruitment 
+C 	7. Species, Year, SpBio in MPA 
+C 	8. Species, Year, Age, N at age (for both sex)
+C 	9. Species, Year, N at age 0 (for both sex)
+C 	10. Species, Year, SpBio in MPA 
+C 	11. Species, Year, SpBio in MPA 
+C 	12. Year, Total catch, maximum effort, quota per species
+C 	13. age, selectivity at age by species
+C 	14. some spatial model input variables
+C 	15. species, block, N at equilibrium (not useful for non spatial model)
+C 	16. species, block, N at equilibrium (not useful for non spatial model)
+C 	17. Year, SpBio, Relative SpBio, Total catch, Quota, Total effort
+C 	18. Year, net effort / maximum effort
+C 	19. Year, Nsum, Catch
+C 	20. Year, species, block, larvae, recruitments
+C 	21. Isim, year, species, CPUE
+C 	22. Isim, year, species, area, Survey estimates
 C
-	USE ShareDataRatioSubs
+      USE ShareDataRatioSubs
       IMPLICIT NONE
 C
 C     Local variables 
@@ -3151,13 +3271,18 @@ C     Carey is adding 2 files, one for catch cpue and one for survey cpue
 624   FORMAT(1x,I2,1x,I4,1x,200(F20.12,1x))
 !Sim,Yr,Ispec,Iarea,CPUE
       END SUBROUTINE Summary2
+
 C
 C ===========================================================================
-C
-	
+C    
+	  
       SUBROUTINE Summary3(Year)
 C
 C This subroutine dumps results to a file
+C 	1. Species, Year, Relative Spbio (to the first year)
+C 	2. Species, Year, Relative SpBio (to the max value)
+C 	3. Species, Year, SpBio
+C 	4. Species, Year, relative Recruitment to the max recruits
 C
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -3211,13 +3336,20 @@ C     Open file
 616   FORMAT(1x,I2,1x,I4,1x,3(F10.6),1x,2(F10.3),1x,2(I4))
 
       END SUBROUTINE Summary3
+
 C
 C ===========================================================================
-C  
-	    
+C    
+	  
       SUBROUTINE GenData(Yr)
 C
-C This subroutine species the data for use in assessments
+C  This subroutine creates the data used in the assessment model = CAB.exe
+C  Steps:
+C 	1. Catch is observed without errors
+C 	2. Fishery catch rate index with lognormal errors (Kotaro modified it so that is is lognormally distributed)
+C 	3. Survey index of abundance with lognormal errors 
+C 	4. Extract the commercial catch at age (fishery age composition data)
+C 	5. Extract the survey catch at age (survey age composition data)
 C      
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -3240,30 +3372,36 @@ C     Extract the catch by assessment area
      +    CatBio(Ispec,Iarea,Yr)
 10000 CONTINUE       
 C
-C     Extract the catch-rate index
+      !------------------------------------------------------------
+C      
+C     Extract the catch-rate index    
+C     Kotaro modified a few things so that the CPUE (catch) follows a lognormal distribution in EACH area
+C     There was a controversy on whether to add the error on the catch (numerator) or the effort (denomiator) (discussion between CRM, AEP, RM)
+C     However, we decided to add error on catch because the technical interaction model will be essentially used with ONE strata (area)
+C 	  and the EM assumes that fishery CPUE is lognormally distributed
+C     Need to modify this code if one want to use multiple area with different assumption (right now lognormality is assumed for each strata)
+C
       DO 20000 Ispec = 1,Nspec
        Top = 0
        Bot = 0
        DO 21000 Iarea = 1,Narea
         Error = XNORM(2,0.0d0,CPUECV,ISEEDO)-CPUECV**2.0/2.0
         IF (CatBIo(Ispec,Iarea,Yr).GT.0.AND.
-     +     (Yr.LT.1.OR.NoCPUEMPA.EQ.0)) THEN
-C=============================================================
+     +     NoCPUEMPA.EQ.0.AND.Effort(Iarea,Yr).GT.0) THEN
          IF (IsDeterm.EQ.1) THEN 
 	     Error = 0
 	   ENDIF
-C============================================================
-         CPUE(Ispec,Iarea,Yr) = TruExp(Ispec,Iarea,Yr)
-    !    CPUE(Ispec,Iarea,Yr) = CatBio(Ispec,Iarea,Yr)/Effort(Iarea,Yr)
+    !     CPUE(Ispec,Iarea,Yr) = TruExp(Ispec,Iarea,Yr)
+         CPUE(Ispec,Iarea,Yr) = CatBio(Ispec,Iarea,Yr)/Effort(Iarea,Yr)
+     +    * EXP(Error)
     !    CPUE(Ispec,Iarea,Yr) = CPUE(ispec,Iarea,Yr) * EXP(Error)
-         CPUE(Ispec,Iarea,Yr) = CatBio(Ispec,Iarea,Yr)/(Effort
-     +(Iarea,Yr)* EXP(Error))
          CVCPUE(Ispec,Iarea,Yr) = CPUECV
 
        !  Top = Top + CatBio(Ispec,Iarea,Yr)
        !  Bot = Bot + EXP(Error)/Effort(Iarea,Yr)
-         Top = Top + CatBio(Ispec,Iarea,Yr)
-         Bot = Bot + EXP(Error)*Effort(Iarea,Yr)
+       !  Top = Top + CatBio(Ispec,Iarea,Yr)
+       !  Bot = Bot + EXP(Error)*Effort(Iarea,Yr)
+         Top = Top + CPUE(Ispec,Iarea,Yr)
         ELSE
          CPUE(ISpec,Iarea,Yr) = -1
          CVCPUE(Ispec,Iarea,YR) = -1
@@ -3271,20 +3409,20 @@ C============================================================
 21000  CONTINUE        
        IF (Top.Gt.0) THEN
   !      CPUE(ISpec,0,Yr) = Top*Bot
-        CPUE(ISpec,0,Yr) = Top/Bot
-        CVCPUE(Ispec,0,YR) = CPUECV
+  !      CPUE(ISpec,0,Yr) = Top/Bot
+         CPUE(ISpec,0,Yr) = Top/Narea       ! this calculates the average CPUE accross areas
+         CVCPUE(Ispec,0,YR) = CPUECV
        ELSE
-        CPUE(ISpec,0,Yr) = -1
-        CVCPUE(Ispec,0,YR) = -1
+         CPUE(ISpec,0,Yr) = -1
+         CVCPUE(Ispec,0,YR) = -1
        ENDIF
-20000 CONTINUE        
+20000    CONTINUE        
 C
+      !------------------------------------------------------------
+C        
 C     Extract the survey index
       DO 30000 Ispec = 1,Nspec
        Top = 0
-C====================================================================
-
-C======================================================================
        DO 31000 Iarea = 1,Narea
         Error = XNORM(2,0.0d0,SurvCV,ISEEDO)-SurvCV**2.0/2.0
         IF (Yr.GE.FirstSurvYr.AND.MOD(Yr-FirstSurvYr,FreqSurv).EQ.0) 
@@ -3300,14 +3438,16 @@ C======================================================================
 31000  CONTINUE        
        IF (Top.GT.0) THEN
     !    SurveyEst(Ispec,0,Yr) = Top !Here Top is the sum of SurveyEst over areas
-         SurveyEst(Ispec,0,Yr) = Top/Narea !In order to make graphs that are comparable for 1 vs. 3 areas.
-        SurveyCV(ISpec,0,Yr) = SurvCV
+         SurveyEst(Ispec,0,Yr) = Top/Narea  ! this calculates the average CPUE accross areas
+         SurveyCV(ISpec,0,Yr) = SurvCV
        ELSE
         SurveyEst(Ispec,0,Yr) = -1
         SurveyCV(ISpec,0,Yr) = -1
        ENDIF
 30000 CONTINUE        
 C
+      !------------------------------------------------------------
+C           
 C     Extract the commercial catch-at-age data
       DO 40000 Ispec = 1,Nspec
        DO 40000 Isex = 1,Nsex
@@ -3316,7 +3456,7 @@ C     Extract the commercial catch-at-age data
          CNObs(Ispec,0,Yr,Isex,Iage) = 0
 40100   CONTINUE          
         DO 41000 Iarea = 1,Narea
-C
+C   
 C        Renormalize 
          Total = 0
          DO 41100 Iage = 0,AmaxEst(Ispec)
@@ -3369,6 +3509,8 @@ C
 42000    CONTINUE        
         ENDIF
 40000 CONTINUE         
+C
+      !------------------------------------------------------------
 C
 C     Extract the survey catch-at-age data (Carey's addition to this comment: this looks like a repeat of the process for effective catch at age.)
       DO 50000 Ispec = 1,Nspec
@@ -3436,13 +3578,22 @@ C
 C
       RETURN
       END SUBROUTINE GenData
+
 C
 C ===========================================================================
-C  
-	    
+C    
+	  
       SUBROUTINE DoCab2(Ispec,Iarea1,Iarea2,Year1,Year2,MinA,INDC)
 C
 C This subroutine sets up a run using CAB.TPL and conducts the assessment for a single configuration run
+C Steps:
+C 	1. Set the CAB.dat file
+C 	2. Set the CAB.ctl file --> this is influenced by the model specification
+C 	3. Call CAB.exe
+C 	4. Read the cab report file 
+C 	5. Read the cab par file
+C 	6. then if the cab.cor file exists, then run extracts the number at age based on MVN distribution for the projection
+C 	7. Use of "system" command to run other program. Here ".bat" file
 C      
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -3687,8 +3838,10 @@ C     Summation limits for aggregating results
        Iarea2a = Iarea2
       ENDIF
      	Write(*,'(1x,A)') 'About to call CAB.EXE'
+      Write(*,*) 'Sim: ', Isim, 'Year: ', Year2, 'Config: ', Iconfig
       !CALL SYSTEM("CAB.EXE -est -nox >output.log")
       CALL SYSTEM("CAB.EXE -nox >output.log")
+      Write(*,*) 'Finished cab assessment'
       !Option 2: Potentially rename important output files to be config-specific here.
       !Option 2: Potentially end Iconfig loop here.
 
@@ -3708,17 +3861,24 @@ C     Summation limits for aggregating results
       !put a stop to further processing if the .cor file doesn't actually exist.
       INQUIRE(FILE = "cab.cor",EXIST=cor_exists)
       IF (cor_exists) THEN
-        CALL IterateNvecsMVN(Ispec,Iarea1+Addone,Iconfig,Year2+1) !Might need to move this to avoid iterating for iconfig = 0 (which will be the true value and not the assessment author's specified trial values)
+          Write(*,*) 'cab.cor exists for Sim ',Isim,', Year ', Year2, 
+     +' Config ', Iconfig
+          CALL IterateNvecsMVN(Ispec,Iarea1+Addone,Iconfig,Year2+1) !Might need to move this to avoid iterating for iconfig = 0 (which will be the true value and not the assessment author's specified trial values)
       ENDIF
       !Make a flag
       IF (cor_exists.EQ..FALSE..OR.TestMVN.EQ.'Correlation') THEN
         WRITE(402,*) Isim,GlobalProjYr,Ispec,Iconfig,TestMVN
         !return without re-calculating the quota (auto-sets quota to last year's)
         QuotaAct(Ispec) = CatBio(Ispec,1,GlobalProjYr-1)
+        Write(*,*) 'Using last years catch as the quota:'
+        Write(*,*) '.cor file DNE or prob with MVN process for Sim ',
+     +Isim,', Year ',Year2,', Config ', Iconfig
         !cleanup from this config 
         !Call a batch file to copy cab.rep to cab.rep_YrXX_configYY and delete extra cab files
         CALL SYSTEM(cstring)
         CALL SYSTEM("DeleteCabStuff")
+        
+        !1/6/15: need to delete mvninput files and EstNatAge,EstStdNatAge,EstNatCor here??
         
         !Return and run through annual proj, etc with last year's quota. Don't bother with control rule calculations
         RETURN !no use in continuing with the making of Nvecs as plan is to set quota to last year's, make a flag, and continue on.
@@ -3729,9 +3889,9 @@ C     Summation limits for aggregating results
         CALL SYSTEM(cstring)
         CALL SYSTEM("DeleteCabStuff")
       
-        CLOSE(957)
-        CLOSE(958)
-        CLOSE(959)
+ !       CLOSE(957)  !not used outside of ReadCabRep,so closed at the end of that function
+ !       CLOSE(958)  !not used outside of ReadCabRep,so closed at the end of that function
+ !       CLOSE(959)  !needed to be closed within ReadCabRep or else weird mistakes when something doesn't converge.
         
 1298  CONTINUE !End Iconfig loop.
 
@@ -3746,14 +3906,24 @@ C---------------------------------------------------
 
 C---------------------------------------------------
 !This is the p* control rule (Created by CRM)
-      
-
       !This function sets the quota:
         !Will only get to Pstar calcs if all configs converged:
-        CALL FindPstarQuota(Year2,Ispec) !The above two subroutines are called within FindPstarQuota.
+      IF (UsePstar.EQ.1) THEN 
+         CALL FindPstarQuota(Year2,Ispec) !The above two subroutines are called within FindPstarQuota.
+ !      FindFforCatchReg(Year2), FindFofl() both done within FindPstarQuota
+      ENDIF
+     
+C-----------------------------------------------------
+
+C---------------------------------------------------
+!This is the AFSC tier system quota
+      !This function sets the quota:
+        !Will only get to Pstar calcs if all configs converged:
+    !  IF (UsePstar.EQ.0) THEN 
+    ! +     CALL FindPstarQuota(Year2,Ispec) !The above two subroutines are called within FindPstarQuota.
  !      FindFforCatchReg(Year2), FindFofl() both done within FindPstarQuota
 C-----------------------------------------------------
-      RETURN
+        RETURN
 
       
 8051  FORMAT("CABD.",A1,"0",I1)
@@ -3849,10 +4019,11 @@ C-----------------------------------------------------
 611   FORMAT(//"# End of file"/"999")
 
       END SUBROUTINE DoCab2
+
 C
 C ===========================================================================
-C 
-	     
+C    
+	  
       SUBROUTINE TruQuota(Ispec,Iarea,Year2,Year1)
 C
 C This subroutine computes the quota using the 40:10 rule
@@ -3992,13 +4163,19 @@ C
 602   FORMAT("TDM",1x,I2,1x,I2,1x,I4,1x,F6.3,1x,F7.5,1x,F8.2,1x,F5.3,
      +       1x,F8.2,2(1x,F10.1))
       END SUBROUTINE TruQuota
+
 C
 C ===========================================================================
-C 
-	     
+C    
+	  
       REAL*8 FUNCTION getYield(Fpass,Ispec)
 C
-C This function calculates Yields given F
+C This function calculates Yields given F. ONLY used with the TruQuota (40:10 rule) (But there seems to be an error)
+C Steps:
+C 	1. Calculates the unfished SPR
+C 	2. Calculates the fished SPR for a specific F level	
+C 	3. Calculates the yield per recruit
+C 	4. The calculation of recruitment if erroneous. It is not based on Spawning biomass
 C      
 
 	USE ShareDataRatioSubs
@@ -4033,7 +4210,7 @@ C     Age-stucture
        Surv =EXP(-M(Ispec))*(1-Fpass*Sel(Ispec,Iage-1))
        NN(Iage) = NN(Iage-1)*Surv
 20100 CONTINUE
-      Surv =EXP(-M(Ispec))*(1-Fpass*Sel(Ispec,MaxA))
+      Surv = EXP(-M(Ispec))*(1-Fpass*Sel(Ispec,MaxA))
       NN(MaxA) = NN(MaxA)/(1-Surv)
       FSPR = 0
       DO 20200 Iage = 1,MaxA
@@ -4045,7 +4222,7 @@ C     Age-stucture
      +     Wght(Ispec,1,Iage,Itime)
 20300 CONTINUE
 C
-C     Recruitment
+C     Recruitment 
       Top = 4*Steep(Ispec)*FSPR - (1-Steep(ISpec))*VSPR
       Bot = 5*Steep(ISpec)-1
       Recr = Top/Bot/FSPR
@@ -4053,11 +4230,19 @@ C     Recruitment
 C
       RETURN
       END FUNCTION getYield
+      
 C
-
 C===============================================================================
+C
+      
 	SUBROUTINE FindMSY()
-	  USE ShareDataRatioSubs
+C
+C This subroutine is supposed to find the MSY value
+C Steps:
+C 	1. It calls FIT2 
+C 	2. then FUNK2
+C	
+        USE ShareDataRatioSubs
         IMPLICIT NONE
         
 	  REAL(8), DIMENSION(100):: Y
@@ -4071,10 +4256,25 @@ C===============================================================================
 	  Z = FUNK2(Y)
 	  MSYEffort1 = Y(1)
 
-	END SUBROUTINE FindMSY
+      END SUBROUTINE FindMSY
+
+C
 C===============================================================================
+C
+
 	REAL*8 FUNCTION FUNK2(Y)
-	USE ShareDataRatioSubs
+C This function is a totally different version that the FUNK function above but produces the TrialP value
+C	Steps:
+C 	1. For Funk2_minOpt=1, the function calculates the catch per projected year
+C 		1.1 It projects the population forward
+C 		1.2 It generates the data that goes along and the catch per year
+C 	2. For Funk2_minOpt=2, the function optimizes the F level that leads to a desired P* value
+C 		2.1 It finds F for a proposed ABC = proposed catch levels
+C 		2.2 It then find the FOFL for each of the randomly drawn population number at age
+C 		2.3 It then calculates the number of times the proposed ABC lead to F>FOFL = P*
+C
+      
+      USE ShareDataRatioSubs
       IMPLICIT NONE
 
 	  REAL(8), DIMENSION(100) :: Y
@@ -4085,19 +4285,20 @@ C===============================================================================
         INTEGER,DIMENSION(1:Nconfigs) :: OverfishNum
         REAL(8) :: TrialP
         
+    ! Case when Funk2_MinOpt = 1 --> this calculates the catch per projection year   
         IF (Funk2_MinOpt.EQ.1) THEN
 C  	    DO 35000 Yr = -50,250
 	    DO 35000 Yr = MinPYr,250
             CALL ProjYr(Yr,Y(1))
 	      CALL GenData(Yr)
 
-	    CatNumSum(Yr) = 0
-C	    Carey is calculating Catch in numbers
-	    DO 22000 Ispec = 1,NSpec
-	      DO 22000 Iage = 0,MaxAge
-	        DO 22000 Isex = 1,2
-	          CatNumSum(Yr) = CatNumSum(Yr) + 
-     +	    	  CatNum(Ispec,1,Yr,Isex,Iage)
+	      CatNumSum(Yr) = 0
+C           Carey is calculating Catch in numbers
+	      DO 22000 Ispec = 1,NSpec
+	        DO 22000 Iage = 0,MaxAge
+	          DO 22000 Isex = 1,2
+	            CatNumSum(Yr) = CatNumSum(Yr) + 
+     +	    	CatNum(Ispec,1,Yr,Isex,Iage)
 22000  	  CONTINUE
 35000	     CONTINUE
 
@@ -4106,7 +4307,8 @@ C	    Carey is calculating Catch in numbers
           FUNK2 = 0
       ENDIF !end Funk2_MinOpt
 
-      IF (Funk2_MinOpt.EQ.2) THEN
+    ! Case when Funk2_MinOpt = 2 --> this     
+       IF (Funk2_MinOpt.EQ.2) THEN
         !This is for the outer layer of the nested optimization developed for the p* approach    
            !Below is cut and pasted into FUNK2 with global year and global ispec.
           !Find F(t) that would produce SeedQuota
@@ -4138,23 +4340,19 @@ C	    Carey is calculating Catch in numbers
       
           TrialP = WeightedOverfishNum/WeightedAllNum 
 
-          FUNK2 = ((TrialP-Pstar)**2)*10000
+ !         FUNK2 = ((TrialP-Pstar)**2)*10000
+           FUNK2 = TrialP
           
       ENDIF
       
-      
-
-
-
-
-
-	END FUNCTION FUNK2
-C==============================================================================
-C ===========================================================================
+           END FUNCTION FUNK2
 C
+C==============================================================================
+C
+           
       SUBROUTINE FIT2(X,SSS,NDIM,GRD)
-
-C     Set up the parameters for a fit
+C This subroutine calls amoeba2 to find the proposed ABC level that leads to a proposed P* value
+C Set up the parameters for a fit
 
 C     IMPLICIT NONE
       REAL*8 P(101,100),Y(101),X(100),SSS,FUNK,TOL
@@ -4189,8 +4387,11 @@ C      GRD = 1.2
 
       RETURN
       END
-C====================================================================
+
+C
 C=============================================================
+C
+      
       SUBROUTINE AMOEBA2(P,Y,MP,NP,NDIM,FTOL,ITER)
 C
 C     MULTIDIMENSIONAL MINIMISATION OF THE FUNCTION FUNK(X) WHERE X IS
@@ -4391,7 +4592,10 @@ C        POINT. REPLACE THE OLD HIGH POINT AND CONTINUE
 
       END
 
+C      
 C=========================================================================
+C
+
       SUBROUTINE RPERM(P,N,RANDOMSEED)
 !===Generate a random permutation, P, of the first N integers.
 !   (Shuffling, equivalent to sampling WITHOUT REPLACEMENT).
@@ -4416,10 +4620,11 @@ C=========================================================================
       END DO
       RETURN
       END
-C=========================================================================
 
+C
+C=======================================================================
+C
 
-!=======================================================================
       SUBROUTINE RAND(U,N,RANDOMSEED)
       INTEGER N,X,Y,Z
       REAL U(N),V
@@ -4443,7 +4648,10 @@ C      COMMON/RANDOM/X,Y,Z
       RETURN
       END
 
+C      
 C====================================================================
+C
+
       SUBROUTINE WriteSpecs(UNUM)
 C
 C This subroutine writes the specs for the run to a file for tracking what the simulation did
@@ -4545,16 +4753,13 @@ C	Extras
 	END
 C===================================================================
 
-
-
-
-
+C
 C ===========================================================================
 C
 	
       SUBROUTINE FindInitEffort()
 C
-C This subroutine finds the q-values
+C This subroutine finds the q-values that leads to the specified initial depletion level
 C
 	USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -4605,8 +4810,8 @@ C	X(1) = 1.01
 C=====================================================
 C	Take the rough estimate and do a finer estimate to get the exact effort level that gets you to InitDep.
 	IEffort = MAX(0.0001,(BestRoughEffort-3))
-	DO 10002 jj = 1,20
-	  IEffort = IEffort + 0.3157895 !figure out the increment.         
+	DO 10002 jj = 1,60
+	  IEffort = IEffort + 0.1 !figure out the increment.         
         X(1) = IEffort
 	  SS = FUNK(X)
 	  IF (SS.LT.ObjFun) THEN
@@ -4641,8 +4846,8 @@ C     correct depletion.
 	BestInitEffort = X(1)
       RETURN
       END SUBROUTINE FindInitEffort
+      
 C
-C ===========================================================================
 C ===========================================================================
 C
 	
@@ -4676,64 +4881,6 @@ C     Local variables
 C      X(1) = LOG(TotEffort(0)) !before SS3MPA stuff
 	X(1) = TotEffort(LastDepYear-1) !Carey changed this from 1
 	ObjFun = 1000000
-!	DO 10001 ii = 0,30 !CHANGETHIS
-!C	  DO 10000 Ispec = 1,Nspec
-!	   !i = ii*3+0.0001 !This line works if 18 x 5 grid. !to avoid divide by zeros  CHANGETHIS
-!          i = ii/100 + 0.00000001 !This line is meant for 1 x 1 (non-spatial) model - just till get the new model initialized.
-!          X(1) = i    
-!c        X(Ispec) = TotEffortSeed
-!C10000   CONTINUE
-!
-!!        Carey changed this back from FUNKSCALAR to FUNK on 7/12/11
-!!        SS = FUNKSCALAR(X(1))	
-!         SS = FUNK(X)
-!	    IF (SS.LT.ObjFun) THEN
-!	      ObjFun = SS
-!!	      BestRoughEffort = X
-!            BestRoughEffort = X(1)
-!            BestRoughDepl = FinDepRecord
-!          ENDIF
-!
-!10001 CONTINUE
-!	ObjFunRough = ObjFun
-!      X(1) = BestRoughEffort
-!      !would be nice to have BestRough Depletion here!
-!Ctest
-!!     Carey changed this back from FUNKSCALAR to FUNK on 7/12/11
-!!	SS = FUNKSCALAR(BestRoughEffort)
-!
-!!----------------------------------------
-!!     You might not need this line 7/17/11
-!      !SS = FUNK(X)
-!!----------------------------------------
-!
-!C	Narrow in on an effort level.	
-!C=====================================================
-!C	Take the rough estimate and do a finer estimate to get the exact effort level that gets you to InitDep.
-!	IEffort = MAX(0.000001,(BestRoughEffort-3))
-!	DO 10002 jj = 1,20
-!C        DO 10042 Ispec = 1,Nspec
-!	  IEffort = IEffort + 0.3157895 !figure out the increment.  CHANGETHIS         
-!          X(1) = IEffort
-!C10042   CONTINUE
-!        !Carey changed this back from FUNKSCALAR to FUNK on 7/12/11
-!	  !SS = FUNKSCALAR(X(1))
-!        SS = FUNK(X)
-!	  IF (SS.LT.ObjFun) THEN
-!	    ObjFun = SS
-!	    BestFinalEffort = X(1)
-!        ENDIF
-!
-!10002 CONTINUE
-!C=======================================================
-!
-!	
-!	IF (ObjFunRough.LE.ObjFun) THEN
- !      ! X(1) = BestRoughEffort
-!	  BestFinalEffort = BestRoughEffort
-!	ENDIF
-!    	X(1) = BestFinalEffort
-
       CALL FIT(X,SS,1,CareyGRD)
 C     FIT finsds the constant effort from year 1 to year FinDepYr+1 which
 C     minics the (pre-specified) final depletion. Note that this only works for ONE
@@ -4752,13 +4899,15 @@ C     species
 C
       RETURN
       END SUBROUTINE GetEffLev
+
 C
 C ===========================================================================
-C ===========================================================================
-C ===========================================================================
+C
 
 	SUBROUTINE FindAvgMSY()
-	USE ShareDataRatioSubs
+C This subroutine finds the effort that leads to MSY, MSY  
+C
+      USE ShareDataRatioSubs
       IMPLICIT NONE
 
 	REAL(8), DIMENSION(100) :: X
@@ -4818,15 +4967,16 @@ C     species
 700	FORMAT(1x,F5.3,1x,I4,1x,F15.13,1x,F15.5,1x,F15.10,1x,F15.5)
 
 	RETURN
-	END SUBROUTINE FindAvgMSY
+      END SUBROUTINE FindAvgMSY
+      
+C      
 C================================================================
-
-C ===========================================================================
 C
+
       SUBROUTINE GenObsErr()
 C
 C This subroutine generates the density ratio survey errors that will be needed for the
-C current simulation
+C  simulation. NOT NEEDED for the techinteraction model
 
 C	Call this for the years for which density ratio sampling happens and only
 C	when SuperSim = 1
@@ -4853,10 +5003,9 @@ C     Generate the recruitment error terms
 C
       RETURN
       END SUBROUTINE GenObsErr
+
 C
 C ===========================================================================
-C
-C===============================================================================
 C
 	
       REAL*8 FUNCTION FUNKSCALAR(X)
@@ -4865,6 +5014,10 @@ C This function is the objective function associated with MinOpt = 8. It was mad
 C Regular FUNK deals with X as a vector.  You can't use actual (read-in arguments) that are scalars when the dummy argument (X) is not a scalar.
 C http://software.intel.com/en-us/blogs/2009/03/31/doctor-fortran-in-ive-come-here-for-an-argument/
 C to what is specified as initial depletion or final depletion
+C Options:
+C 	1. If MinOpt = 3, it calls ProjYr and loops over start to end year to calculate the final depletion level for an input E level for ONE species. Then it minimizes the SS difference between the observed depletion level and the specified depletion level. 
+C 	2. If MinOpt = 8, it calls ProjForward and calculates the final depletion level for an input E level for ALL species. Then it minimizes the SS difference between the observed depletion level and the specified depletion level SUMMED across ALL species. 
+C
 	USE ShareDataRatioSubs
       IMPLICIT NONE
       
@@ -4883,6 +5036,9 @@ C     Reset FUNKSCALAR
       FUNKSCALAR = 1.0E20 
 C
 C     How to proceed depends on MinOpt
+      
+      !--------------------------------------------------------      
+C     If MinOpt.EQ.3 --> this objective function is the SS difference in final depletion for a specific E level for 1 species
       IF (MinOpt.EQ.3) THEN 
 C      
        DO 31000 Yr = StartYr,EndYr  !Define in GetEffLev
@@ -4908,7 +5064,9 @@ C        TheEffort(1) = EXP(X(1))  !CHANGETHIS
 C       WRITE(*,*) FUNKSCALAR,TheEffort(1),Depl
       FinDepRecord = Depl 
       ENDIF
-	
+
+      !--------------------------------------------------------      
+C     If MinOpt.EQ.8 --> this objective function is the SS difference in final depletion for a specific E level SUMMED accross species
       IF (MinOpt.EQ.8) THEN 
 C
 C      Copy values across
@@ -4940,14 +5098,10 @@ C========================================================================
 
       RETURN
       END FUNCTION FUNKSCALAR
+
 C
 C ===========================================================================
-
-
-
-
-
-!=====================================================================
+C
 
       SUBROUTINE MovementForSS3
       USE ShareDataRatioSubs
@@ -4991,14 +5145,16 @@ C ===========================================================================
 
       END SUBROUTINE MovementForSS3
 
-!======================================================================
+C
+C ===========================================================================
+C
 
-
-!===============================================================
        SUBROUTINE mydate(mystring)
+C    This subroutine outputs the date and time of the simulation
+C
        IMPLICIT NONE
 
-       ! this is based on a website example: http://download.oracle.com/docs/cd/E19205-01/819-5259/aetcf/index.html
+      ! this is based on a website example: http://download.oracle.com/docs/cd/E19205-01/819-5259/aetcf/index.html
        integer date_time(8)
        character*10 b(3)
        character*25 mystring
@@ -5030,11 +5186,11 @@ C ===========================================================================
  300   FORMAT('Time: ',I2,':',I2,':',I2)
  301   FORMAT('Date:',I2,'/',I2,'/',I4,', Time: ',I2,':',I2,':',I2)
 
-       END SUBROUTINE mydate
-!=================================================================
+      END SUBROUTINE mydate
 
-
-!=====================================================================
+C
+C ===========================================================================
+C
 
       SUBROUTINE Movement2ForSS3(TempN)
       USE ShareDataRatioSubs
@@ -5097,11 +5253,9 @@ C ===========================================================================
 
       END SUBROUTINE Movement2ForSS3
 
-!======================================================================
-      
-      
-      
- !======================================================================
+C
+C ===========================================================================
+C
 
       SUBROUTINE ReadCabRep(Year1,Year2,INDC,Iarea1,Iarea2,Carea1,Ispec,
      +Iarea1a,Iarea2a,Icon)
@@ -5127,9 +5281,9 @@ C      Right now just read in a cab file, as before.
       REAL(8) :: SpTru,ExpTru,B0tru
       INTEGER::TheYr,t1,t2,t3
       
-      OPEN(UNIT=957,FILE='SUMM1.EST',ACCESS='APPEND')
-      OPEN(UNIT=958,FILE='SUMM2.EST',ACCESS='APPEND')
-      OPEN(UNIT=959,FILE='REC.EST',ACCESS='APPEND')
+      OPEN(UNIT=957,FILE='results/SUMM1.EST',ACCESS='APPEND')
+      OPEN(UNIT=958,FILE='results/SUMM2.EST',ACCESS='APPEND')
+      OPEN(UNIT=959,FILE='results/REC.EST',ACCESS='APPEND')
       IF (INDC.EQ."B") THEN !Carey changed from "C" to "B" to make consistent with WSGReport and numbers
        OutUnit = 958
       ELSE 
@@ -5277,13 +5431,18 @@ C     +,BioOut, Recruit, Hrate ') THEN
  !     SigmaRCAest(Ispec,Carea1) = SQRT(SigmaRCAEst(ISpec,Carea1))
       
       CLOSE(99)
+      CLOSE(957)
+      CLOSE(958)
+      CLOSE(959)
  
 801   FORMAT(3(1x,I5),1x,2(F15.5,1x),2(F15.6,1x))
 802   FORMAT(3(1x,I5),1x,F20.9,1x)
       END SUBROUTINE ReadCabRep
-!====================================================================
-     
-!====================================================================
+
+C
+C ===========================================================================
+C
+
       SUBROUTINE ReadPar(Ispec,Iarea,Icon)
       USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -5319,18 +5478,19 @@ C     +,BioOut, Recruit, Hrate ') THEN
       CLOSE(50) !Close the par file.
 1000  FORMAT(A1,1x,A6)      
       END SUBROUTINE ReadPar
-!====================================================================      
-      
-!====================================================================      
+
+C
+C ===========================================================================
+C
+
       SUBROUTINE IterateNvecsMVN(Ispec,Iarea,Iconfig,Iyear)
+C     This function was written to sample vectors of log(N-at-age) from a multivariate normal (MVN) distribution
+C     As a quick way to generate a distribution for numerically calculating a P* control rule
+C     An alternative to this method would be to do MCMC to generate parameter vectors (including N-at-age)
+C     MVN is a program written by John Uebersax to generate multivariate normal random numbers, given means, stds, and a correlation matrix.
+      
       USE ShareDataRatioSubs
       IMPLICIT NONE
-      
-      !This function was written to sample vectors of log(N-at-age) from a multivariate normal (MVN) distribution
-      !As a quick way to generate a distribution for numerically calculating a P* control rule
-      !An alternative to this method would be to do MCMC to generate parameter vectors (including N-at-age)
-      !MVN is a program written by John Uebersax to generate multivariate normal random numbers, given means, stds, and a correlation matrix.
-      
       !Global variables
       INTEGER :: Ispec,Iarea,Iconfig,Iyear
       
@@ -5350,6 +5510,9 @@ C     +,BioOut, Recruit, Hrate ') THEN
       
       !This probably needs to be global?? Yep
  !     REAL(8),DIMENSION(1:Nspec,1:Nmvn,0:Amax(Ispec)) :: Nvec
+      EstNatAge = 0.0
+      EstStdNatage = 0.0
+      EstNatAgeCor= 0.0
       
       NumAges = AINT((Amax(Ispec) + 1)/12.0)
       IF (MOD((Amax(Ispec) + 1),12).GT.0) THEN
@@ -5533,10 +5696,10 @@ C     +,BioOut, Recruit, Hrate ') THEN
 1009  FORMAT(I5,12x,"#Random Number Seed")
         END SUBROUTINE IterateNvecsMVN 
 
-!====================================================================     
-     
+C
+C ===========================================================================
+C
 
-!====================================================================     
       SUBROUTINE ReadCR()
       USE ShareDataRatioSubs
       IMPLICIT NONE
@@ -5554,13 +5717,15 @@ C     +,BioOut, Recruit, Hrate ') THEN
       READ(540,('(40X,I5)')) Nmvn
       READ(540,('(40X,I5)')) Nconfigs
 
+      READ(540,*)
       DO 1278 Ispec = 1,Nspec
         READ(540,*)
-        READ(540,('(40X,15(F5.3,1X))')) (EstM(Ispec,Iconfig),
-     +Iconfig = 1,Nconfigs)
-        READ(540,('(40X,15(F5.3,1X))')) (IEstSteep(Ispec,Iconfig),
-     +Iconfig = 1,Nconfigs)
-        READ(540,('(40X,15(F5.3,1X))')) (ConfigWts(Ispec,Iconfig),
+        READ(540,('(40X,15(F5.3,1X))')) 
+     +   (EstM(Ispec,Iconfig),Iconfig = 1,Nconfigs)
+        READ(540,('(40X,15(F5.3,1X))')) 
+     +   (IEstSteep(Ispec,Iconfig),Iconfig = 1,Nconfigs)
+        READ(540,('(40X,15(F5.3,1X))')) 
+     +   (ConfigWts(Ispec,Iconfig),
      +Iconfig = 1,Nconfigs)
 1278  CONTINUE
       
@@ -5571,24 +5736,29 @@ C     +,BioOut, Recruit, Hrate ') THEN
       CLOSE(540)
       RETURN
       END SUBROUTINE ReadCR
-!===================================================================
 
-!===================================================================
+C
+C ===========================================================================
+C
+
       SUBROUTINE DummyCR(Ispec)
+C This subroutine is to assign a dummy catch that is fed in to the OM for the following year
+C It's a dummy control rule for testing purposes.      
       USE ShareDataRatioSubs
       IMPLICIT NONE
       
       INTEGER :: Ispec
-      !This subroutine is to assign a dummy catch that is fed in to the OM for the following year
-      !it's a dummy control rule for testing purposes.
+
       Quota(Ispec) = 500
       
       END SUBROUTINE DummyCR
-!===================================================================
-      
-!===================================================================
-!AFSC Tier 3 control rule:
+
+C
+C ===========================================================================
+C
+
       SUBROUTINE Tier3CR()
+C AFSC Tier 3 control rule:
       USE ShareDataRatioSubs
       IMPLICIT NONE
 
@@ -5601,12 +5771,16 @@ C     +,BioOut, Recruit, Hrate ') THEN
       
       
       END SUBROUTINE Tier3CR
-!===================================================================
-      
-!===================================================================
-!Subroutine to calculate F given a trial ABC to be used for the P* approach HCR
-!Attention that CRM is only making this work with a catch limit applied to one aggregated area.
+
+C
+C ===========================================================================
+C
+
       SUBROUTINE CalcCatchFromF(Fval,Mval,TheNs,SelexVec,WeightA)
+C Subroutine to calculate F given a trial ABC to be used for the P* approach HCR
+C Attention that CRM is only making this work with a catch limit applied to one aggregated area.
+C This function is called in the FUNK2 function (for MinOpt = 2)
+C
       USE ShareDataRatioSubs
       IMPLICIT NONE
 
@@ -5646,15 +5820,19 @@ C     +,BioOut, Recruit, Hrate ') THEN
 100   CONTINUE
 
       END SUBROUTINE CalcCatchFromF
-!===================================================================
 
-!===================================================================
+C
+C ===========================================================================
+C
+
       SUBROUTINE FindFforCatchReg(IYear,Ispec)
+C Uses CalcCatchFromF (called from MinOpt.EQ.2 in FUNK2) to find the F that results in a particular catch regulation
+C given a vector of Numbers-at-age and values for M, selex, and weight-at-age.
+C Attention: this was called previously in FUNK but CRM modified it to use FUNK2
+C      
       USE ShareDataRatioSubs
       IMPLICIT NONE
       
-      !Uses CalcCatchFromF (called from MinOpt.EQ.10 in FUNK) to find the F that results in a particular catch regulation
-       !given a vector of Numbers-at-age and values for M, selex, and weight-at-age.
        !Global variables
        INTEGER :: IYear,Ispec
        
@@ -5718,21 +5896,20 @@ C     +,BioOut, Recruit, Hrate ') THEN
 
       RETURN       
       END SUBROUTINE FindFforCatchReg
-!===================================================================
 
-      
+C
+C ===========================================================================
+C
 
-
-!===================================================================
-!===================================================================
 !      SUBROUTINE AFSC_SPR(Fval,Mval,Fecvec,Recvec,Ispec,Iconfig)
       SUBROUTINE AFSC_SPR(Fval,Mval,Fecvec,Recvec,SelexVec,PlusAge)
+C Find the SPR rate and SSB_SPR given an F (Fval) and other population numbers
+C Using the average recruitment from 1978 to IYear - 2 to calc B_SPR is what makes this function specific to AFSC
+C This is used within a FIT and FUNK function to calculate F_35% and B_40% - 2 diff. calls to this.
+C Attention: Need to be careful because CRM uses FUNK2 for some of the operations instead of FUNK so need to be sure that we change this for the tech int model
+C   
       USE ShareDataRatioSubs
       IMPLICIT NONE
-      
-      !Find the SPR rate and SSB_SPR given an F (Fval) and other population numbers
-      !Using the average recruitment from 1978 to IYear - 2 to calc B_SPR is what makes this function specific to AFSC
-      !This is used within a FIT and FUNK function to calculate F_35% and B_40% - 2 diff. calls to this.
       
       !Global variables
       REAL(8),DIMENSION(100) :: Fval  !Because this is X, but only 1 dim of X is used X(1)
@@ -5794,10 +5971,13 @@ C     +,BioOut, Recruit, Hrate ') THEN
       
       RETURN
       END SUBROUTINE AFSC_SPR
-!====================================================================
-      
-!===================================================================
+
+C
+C ===========================================================================
+C
+
       SUBROUTINE FindFofl(Ispec,Iyear)
+C This is the subroutine that set up the MinOpt rule for the FUNK function in order to determine the F35%, F40%, B35%, and B40% = one of them is the Fofl depending in the tier system (not the true Fofl)
       USE ShareDataRatioSubs
       IMPLICIT NONE
       
@@ -5957,20 +6137,20 @@ C     +,BioOut, Recruit, Hrate ') THEN
 
       RETURN
       END SUBROUTINE FindFofl
-!===================================================================
-      
-!===================================================================
-      SUBROUTINE FindPstarQuota(IYear,Ispec) !IYear = Year2 within DoCab2 (can change this to something more clear)
+
+C
+C ===========================================================================
+C
+
+      SUBROUTINE FindPstarQuota(IYear,Ispec) !IYear = Year2 within DoCab2 (can change this to something more clear)    
+C  This subroutine finds the ABC that results in a probability of p* of overfishing
+C  The method is to use numerical integration to calculate Pr(estF(t)>estOFL) = p
+C  and uses the FIT and FUNK functions to find the ABC that results in p = p* (p* is specified in the CR.dat input file)
+C  There is a nested optimization using FIT and FUNK to find the F(t) resulting in a particular trial ABC value
+C  for each of Nmvn randomly drawn vectors of Numbers-at-age (drawn in the IterateNvecsMVN subroutine; F(t) found in FindFforCatchReg)
+C  
       USE ShareDataRatioSubs
       IMPLICIT NONE
-      
-      !This subroutine finds the ABC that results in a probability of p* of overfishing
-      ! The method is to use numerical integration to calculate Pr(estF(t)>estOFL) = p
-      ! and uses the FIT and FUNK functions to find the ABC that results in p = p* (p* is specified in the CR.dat input file)
-      ! There is a nested optimization using FIT and FUNK to find the F(t) resulting in a particular trial ABC value
-      !    for each of Nmvn randomly drawn vectors of Numbers-at-age (drawn in the IterateNvecsMVN subroutine; F(t) found in FindFforCatchReg)
-       
-      !
        !Global variables
        INTEGER :: IYear,Ispec
 
@@ -5990,8 +6170,8 @@ C     +,BioOut, Recruit, Hrate ') THEN
           CareyGRD2 = 1.2
           
           Y(1) = LOG(SeedQuota)
-          !CALL FIT2(Y,...)
-          CALL FIT2(Y,SSS,1,CareyGRD2)
+           CALL Bisect(Y,SSS,0.01,3.0,1000)
+!          CALL FIT2(Y,SSS,1,CareyGRD2) !This used to be used (AMOEBA optimization)
           SSS = FUNK2(Y) !Y might not be the best variable either, as it appears within other functions, but probably ok in that it's a local variable.
           
 !          !Below is cut and pasted into FUNK2 with global year and global ispec.
@@ -6010,13 +6190,17 @@ C     +,BioOut, Recruit, Hrate ') THEN
        
       
           !QuotaAct(Ispec) = X-type results from new FIT function
-          QuotaAct(Ispec) = EXP(Y(1))  !Dummy line until numerical integration is a reality.
+          QuotaAct(Ispec) = EXP(Y(1))  
+          EstimatedP = SSS
 !114    CONTINUE
        
        RETURN !What does RETURN get you anyway?
       END SUBROUTINE FindPstarQuota
-!===================================================================
       
+C
+C ===========================================================================
+C
+    
 !!===================================================================
 !      SUBROUTINE FindMSY(IYear,Ispec) !IYear = Year2 within DoCab2 (can change this to something more clear)
 !      USE ShareDataRatioSubs
@@ -6036,11 +6220,15 @@ C     +,BioOut, Recruit, Hrate ') THEN
 !      !Within funk, loop over years and call ProjYr and some combo thing. Double check how it worked to FUNK for a particular depletion level
 !      
 !      !Within funk: FUNK = FUNK + -(CatBio(Iyear,Ispec,...)**2) looped over IYear    
- !     END SUBROUTINE FindMSY
+!     END SUBROUTINE FindMSY
       
-!======================================================================
-!===================================================================
+C
+C ===========================================================================
+C
+
       SUBROUTINE SummaryPstar(IYear) !IYear = Year2 within DoCab2 (can change this to something more clear)
+C This produces the summary output from the Pstar control rule along with SPR35%, SPR40% for example. 	
+C
       USE ShareDataRatioSubs
       IMPLICIT NONE
   
@@ -6049,10 +6237,10 @@ C     +,BioOut, Recruit, Hrate ') THEN
       
       !----------------------------------------------------------------
       !Pstar1.OUT (UNIT = 400):
-      IF (IYear.EQ.(FinDepYr+1)) THEN
+      IF (IYear.EQ.(FinDepYr+1).AND.Isim.EQ.1) THEN
       WRITE(400,*) 'Isim IYearMinus1appliedinIYear Ispec Iconfig Ivec 
      + FDistn SSFDistn
-     + EstFOFL TrueF SSTrueF TrueFOFL'
+     + EstFOFL TrueF SSTrueF TrueFOFL EstimatedP Pstar QuotaAct'
       WRITE(400,*) Nsim,NProjYr,Nspec,Nconfigs,Nmvn
       ENDIF
       
@@ -6064,7 +6252,8 @@ C     +,BioOut, Recruit, Hrate ') THEN
      +             SSFDistn(Ispec,IYear-1,Iconfig,Ivec),
      +             EstFOFL(ISpec,Iconfig,Ivec),
      +             TrueF(Ispec,IYear-1),SSTrueF(Ispec,IYear-1),
-     +             TrueFOFL(Ispec,IYear-1)
+     +             TrueFOFL(Ispec,IYear-1),
+     +             EstimatedP,Pstar,QuotaAct(Ispec)
 100   CONTINUE
       !----------------------------------------------------------------
 !         TrueF(Ispec,IYear) = X(1)
@@ -6072,7 +6261,7 @@ C     +,BioOut, Recruit, Hrate ') THEN
 
       !----------------------------------------------------------------
       !Pstar2.OUT (UNIT 401): Write out optimization info for estimated F35% and F40% (all configuration-specific)
-      IF (IYear.EQ.(FinDepYr+1)) THEN
+      IF (IYear.EQ.(FinDepYr+1).AND.Isim.EQ.1) THEN
       WRITE(401,*) 'Isim,IYr,Ispec,Icon,EstF35,EstB35,EstSPR35,
      +SSEstSPR35,EstF40,EstB40,EstSPR40,SSEstSPR40,TruSPR35,
      +SSTruSPR35,TruSPR40,SSTruSPR40'
@@ -6095,13 +6284,80 @@ C     +,BioOut, Recruit, Hrate ') THEN
       !----------------------------------------------------------------
       
 1     FORMAT(5(1x,I6),1x,F17.10,1x,F20.5,1x,F17.10,1x,F17.10,1x,F20.5,
-     +1x,F17.10)
+     +1x,F17.10,2(1x,F15.12),1x,F15.5)
 2     FORMAT(4(1x,I4),8(1x,F10.8,1x,F10.4))
 !3     FORMAT(20(25x,1x))
 
       END SUBROUTINE SummaryPstar
-!======================================================================
+
+C
+C ===========================================================================
+C
+
+      SUBROUTINE SummaryPstar_Old(IYear) !IYear = Year2 within DoCab2 (can change this to something more clear)
+C This produces another type of summary output from the Pstar control rule in additio to the SummaryPstar	
+C
+      USE ShareDataRatioSubs
+      IMPLICIT NONE
+  
+      !Global variables
+      INTEGER :: IYear,Ispec,Iconfig,Ivec
       
+      !----------------------------------------------------------------
+      !Pstar1.OUT (UNIT = 400):
+      IF (IYear.EQ.(FinDepYr+1)) THEN
+      WRITE(4000,*) 'Isim IYearMinus1appliedinIYear Ispec Iconfig Ivec 
+     + FDistn SSFDistn
+     + EstFOFL TrueF SSTrueF TrueFOFL EstimatedP Pstar QuotaAct'
+      WRITE(4000,*) Nsim,NProjYr,Nspec,Nconfigs,Nmvn
+      ENDIF
+      
+      DO 100 Ispec = 1,Nspec
+          DO 100 Iconfig = 1,Nconfigs
+              DO 100 Ivec = 1,Nmvn
+      WRITE(4000,1) Isim,IYear-1,Ispec,Iconfig,Ivec,
+     +             FDistn(Ispec,IYear-1,Iconfig,Ivec),
+     +             SSFDistn(Ispec,IYear-1,Iconfig,Ivec),
+     +             EstFOFL(ISpec,Iconfig,Ivec),
+     +             TrueF(Ispec,IYear-1),SSTrueF(Ispec,IYear-1),
+     +             TrueFOFL(Ispec,IYear-1)
+100   CONTINUE
+      !----------------------------------------------------------------
+!         TrueF(Ispec,IYear) = X(1)
+!         SSTrueF(Ispec,IYear) = SS !As a check.      
+
+      !----------------------------------------------------------------
+      !Pstar2.OUT (UNIT 401): Write out optimization info for estimated F35% and F40% (all configuration-specific)
+      IF (IYear.EQ.(FinDepYr+1)) THEN
+      WRITE(4001,*) 'Isim,IYr,Ispec,Icon,EstF35,EstB35,EstSPR35,
+     +SSEstSPR35,EstF40,EstB40,EstSPR40,SSEstSPR40,TruSPR35,
+     +SSTruSPR35,TruSPR40,SSTruSPR40'
+      WRITE(4001,*) Nsim,NProjYr,Nspec,Nconfigs
+      ENDIF
+      
+      DO 101 Ispec = 1,Nspec
+          DO 101 Iconfig = 1,Nconfigs
+      WRITE(4001,2) Isim,IYear-1,Ispec,Iconfig,EstF35(Ispec,Iconfig),
+     +EstB35(Ispec,Iconfig),EstSPR35(Ispec,Iconfig),
+     +SSEstSPR35(Ispec,Iconfig),EstF40(Ispec,Iconfig),
+     +EstB40(Ispec,Iconfig),EstSPR40(Ispec,Iconfig),
+     +SSEstSPR40(Ispec,Iconfig),TrueSPR35(Ispec),SSTrueSPR35(Ispec),
+     +TrueSPR40(Ispec),SSTrueSPR40(Ispec)
+
+101   CONTINUE
+
+      
+      
+      !----------------------------------------------------------------
+      
+1     FORMAT(5(1x,I6),1x,F17.10,1x,F20.5,1x,F17.10,1x,F17.10,1x,F20.5,
+     +1x,F17.10)
+2     FORMAT(4(1x,I4),8(1x,F10.8,1x,F10.4))
+!3     FORMAT(20(25x,1x))
+
+      END SUBROUTINE SummaryPstar_Old
+!======================================================================
+
 !!======================================================================
  !     SUBROUTINE FindFMSY(Ispec) !IYear = Year2 within DoCab2 (can change this to something more clear)
 !      USE ShareDataRatioSubs
@@ -6120,3 +6376,100 @@ C     +,BioOut, Recruit, Hrate ') THEN
 !      !CALL FIT(X,... 
 !      END SUBROUTINE FindFMSY
 !======================================================================
+
+C
+C ===========================================================================
+C
+
+      SUBROUTINE Bisect(Yinit,SSS,Tol,GridSize,NIter)
+C Uses the bisection method to find the P* value (take two points, take the mid point as the next trial, and see if the objective function is improved and keep taking the midpoint until the convergence criteria is achieved	
+C
+      USE ShareDataRatioSubs
+      IMPLICIT NONE      
+      
+      !works for monotonic relatioships.
+      !Global variables
+      REAL(8),DIMENSION(100) :: Yinit
+      REAL(8) :: FUNK2
+      REAL(8) :: SSS
+      REAL :: Tol,GridSize
+      INTEGER :: NIter
+      
+      EXTERNAL FUNK2
+      
+      !Local variables
+      REAL(8),DIMENSION(100):: Ysmall,Ybig
+      REAL(8) :: SSSsmall, SSSbig
+      INTEGER :: i
+      REAL(8) :: SSSfinal
+ 
+
+      !Calculate smaller and larger catch guesses based on GridSize
+ !     Ysmall(1) = (1/GridSize)*Yinit(1)
+      Ysmall(1) = 0.0
+      Ybig(1) = GridSize*Yinit(1)
+ 
+      !Loop over Niter times or until tolerance is reached:
+      i = 0
+      DO WHILE ((i.LE.Niter).OR.(SSSfinal.LE.Tol))
+         SSSsmall = 1.0E+20
+         SSSbig = 1.0E+20
+         SSS = 1.0E+20
+         i = i+1
+        !Calculate objective function values for difference between p and p* under each catch guess (small, init, large)
+        SSS = FUNK2(Yinit)
+ !       SSSsmall = FUNK2(Ysmall)
+ !       SSSbig = FUNK2(Ybig)   
+
+        IF (SSS.LT.Pstar) THEN
+            !search the upper half of the range: find the mid-point of upper half of range
+            Ysmall(1) = Yinit(1)
+            Yinit(1) = Ysmall(1) + (Ybig(1)-Ysmall(1))/2   
+        ELSEIF (SSS.GT.Pstar) THEN
+            !search the lower half of the range: find the mid-point of the lower half of range
+            Ybig(1) = Yinit(1)
+            Yinit(1) = Ybig(1) - (Ybig(1)-Ysmall(1))/2   
+        ELSE
+            !you already found p = p*; return SSS and Yinit
+                
+           RETURN  
+       ENDIF
+        
+      END DO
+      
+      
+      
+      END SUBROUTINE Bisect
+
+C
+C ===========================================================================
+C
+
+C NOTES on the tech int model 
+C
+C Modifications:
+C 1. line 1745: changed Aplus to Amax because it doesn't make sense if not
+C 2. line 2492: included the statement about process error = recruit deviation
+C 3. subroutine getYield is WRONG (the calculation of recruitment)
+C 4. line 4775: refined the increment value for E
+C 5. CRM: line 1745: changed modification 1 back to be Aplus (which has a different meaning depending on whether there's a plus group or not) - Kotaro and Carey discussed.
+C 6. CRM: Uncommented lines 3884 and 3885 to correct inconsistency between Carey and Kotaro's code and make sure old simulation files get cleaned up properly
+C 7. CRM: added back in lines 679-683 to delete old files (again to avoid mix-ups between old and new simulation results)
+C 8. CRM: 
+C
+C TO DO:
+C 0. Be sure to use AFSC_SPR in the MPA_model (the main program) instead of the P* controle rule for the multispecies MSE
+C 1. change the fishery age composition data that goes into CAB to be sampled from a overdispersed distribution (right now it is multinomial)  
+C 2. Change the RECDEVS simulation. We need the possibility to include user-specified rec-devs or a multivariate time series model
+C 3. change the MPAmodel program to choose the effort level for each species that leads to the initial or final depletion level      
+C 4. check that the model is adapted for N species
+C 5. check the run and see if the model makes sense (the three species should have the same dynamics)
+C 6. make the model more realistic
+C 7. include the tech interaction into the model (CALL Jim Ianelli's ADMB .exe. Need to modify this and compile it first)
+C 	7.1. RUN the fishing strategy to the observer data
+C 	7.2. use the above information and build the capacity to have a time varying fishing strategy 
+C 	7.3. include the harvest cap into the model (that is about 1.7 millions based on 2 million - the three species TAC)
+C 8. include the control rule (how to calculate TAC) into the model
+C 9. include an option to generate recdevs based on multivariate time series model
+
+C MERGE to cbisection  
